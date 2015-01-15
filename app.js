@@ -12,10 +12,9 @@ var a127 = require('a127-magic');
 var express = require('express');
 var config = require('config');
 var datasource = require('./datasource');
-var routeHelper = require('./lib/routeHelper');
-var partialResponseHelper = require('./lib/partialResponseHelper');
 var bodyParser = require('body-parser');
-var auth = require('./lib/tc-auth');
+var lcHelper = require('lc-helper');
+var tcAuth = require('tc-auth');
 
 var app = express();
 
@@ -23,7 +22,7 @@ a127.init(function (swaggerConfig) {
   app.use(bodyParser.json());
 
 // central point for all authentication
-  auth.auth(app);
+  tcAuth.auth(app, config);
 
 // Serve the Swagger documents and Swagger UI
   if (config.has('app.loadDoc') && config.get('app.loadDoc')) {
@@ -47,17 +46,17 @@ a127.init(function (swaggerConfig) {
     port = 10010;
   }
 
-  app.use(partialResponseHelper.parseFields);
-
-// a127 middlewares
+  // a127 middlewares
   app.use(a127.middleware(swaggerConfig));
-// generic error handler
-  app.use(routeHelper.errorHandler);
-// render response data as JSON
-  app.use(routeHelper.renderJson);
+
+  // render response data as JSON
+  app.use(lcHelper.middleware.renderJson);
+
+  // generic error handler
+  app.use(lcHelper.middleware.errorHandler);
+  // app.use(errors.middleware.errorHandler);
 
   app.listen(port);
-
   console.log('app started at ' + port);
 });
 

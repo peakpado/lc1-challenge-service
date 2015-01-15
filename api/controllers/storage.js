@@ -6,13 +6,15 @@
  */
 'use strict';
 
+var async = require('async');
+var errors = require('common-errors');
 var datasource = require('./../../datasource').getDataSource();
 var Challenge = datasource.Challenge;
 var File = datasource.File;
-var routeHelper = require('./../../lib/routeHelper');
-var storageLib = require('./../../lib/storage');
-var async = require('async');
-var safeList = require('../../lib/tc-auth/safelist');
+var config = require('config');
+var storageLib = require('lc-storage')(config);
+var tcAuth = require('tc-auth');
+var safeList = tcAuth.safeList(config);
 
 
 /**
@@ -22,13 +24,13 @@ var safeList = require('../../lib/tc-auth/safelist');
  * @param  {Function}   callback    callback function
  * private
  */
-var findById = function(Model, filters, callback) {
-  Model.find(filters).success(function(entity) {
+function _findById(Model, filters, callback) {
+  Model.find(filters).success(function (entity) {
     callback(null, entity);
-  }).error(function(err) {
-    callback(err, null);
+  }).error(function (err) {
+    callback(new errors.Error('DBReadError: '+err.message, err));
   });
-};
+}
 
 /**
  * Helper method to get challenge file URL based on type
@@ -42,50 +44,50 @@ var getChallengeFileURL = function(method, req, res, next) {
   // check authorization
   var challengeId = req.swagger.params.challengeId.value,
     fileId = req.swagger.params.fileId.value,
-    user = routeHelper.getSigninUser(req);
+    user = tcAuth.getSigninUser(req);
 
   async.waterfall([
-    function(cb) {
-      findById(Challenge, {where: {id:challengeId}}, cb);
+    function (cb) {
+      _findById(Challenge, {where: {id: challengeId}}, cb);
     },
-    function(challenge, cb) {
-      if(!challenge) {
-        return cb({message: 'Cannot find a challenge for challengeId ' + challengeId, code: routeHelper.HTTP_NOT_FOUND});
+    function (challenge, cb) {
+      if (!challenge) {
+        return cb(new errors.NotFoundError('Cannot find a challenge for challengeId ' + challengeId));
       }
 
       if (!safeList.currentUserIsSafe(req)) {
-        challenge.getParticipants({where: {userId: user.id}}).success(function(participants) {
+        challenge.getParticipants({where: {userId: user.id}}).success(function (participants) {
           cb(null, participants);
-        }).error(function(err) {
-          cb(err);
+        }).error(function (err) {
+          cb(new errors.Error('DBReadError: '+err.message, err));
         });
       } else {
         cb(null, null);
       }
 
     },
-    function(participants, cb) {
+    function (participants, cb) {
       if (!safeList.currentUserIsSafe(req)) {
         // participant will be an array, should not be empty array
         if (!participants || participants.length === 0) {
-          return cb({message: 'User is not authorized', code: routeHelper.HTTP_UNAUTHORIZED});
+          return cb(new errors.AuthenticationRequiredError('User is not authorized'));
         }
       }
-      findById(File, {where: {id:fileId, challengeId: challengeId}}, cb);
+      _findById(File, {where: {id:fileId, challengeId: challengeId}}, cb);
     },
-    function(file, cb) {
-      if(!file) {
-        return cb({message: 'Cannot find a file for fileId ' + fileId, code: routeHelper.HTTP_NOT_FOUND});
+    function (file, cb) {
+      if (!file) {
+        return cb(new errors.NotFoundError('Cannot find a file for fileId ' + fileId));
       }
       storageLib[method](file, cb);
     }
-  ], function(err, result) {
-    if(err) {
-      routeHelper.addError(req, err, err.code);
+  ], function (err, result) {
+    if (err) {
+      return next(err);   // go to error handler
     } else {
       req.data = {
         success: true,
-        status: routeHelper.HTTP_OK,
+        status: 200,
         metadata: {
           totalCount: 1
         },
@@ -99,49 +101,49 @@ var getChallengeFileURL = function(method, req, res, next) {
 var getSubmissionFileURL = function(method, req, res, next) {
   var challengeId = req.swagger.params.challengeId.value,
     submissionId = req.swagger.params.submissionId.value,
-    user = routeHelper.getSigninUser(req),
+    user = tcAuth.getSigninUser(req),
     fileId = req.swagger.params.fileId.value;
 
   async.waterfall([
-    function(cb) {
-      findById(Challenge, {where: {id:challengeId}}, cb);
+    function (cb) {
+      _findById(Challenge, {where: {id: challengeId}}, cb);
     },
-    function(challenge, cb) {
-      if(!challenge) {
-        return cb({message: 'Cannot find a challenge for challengeId ' + challengeId, code: routeHelper.HTTP_NOT_FOUND});
+    function (challenge, cb) {
+      if (!challenge) {
+        return cb(new errors.NotFoundError('Cannot find a challenge for challengeId ' + challengeId));
       }
 
       if (!safeList.currentUserIsSafe(req)) {
         challenge.getSubmissions({where: {submitterId: user.id}}).success(function (submissions) {
           cb(null, submissions);
         }).error(function (err) {
-          cb(err);
+          cb(new errors.Error('DBReadError: '+err.message, err));
         });
       } else {
         cb(null, null);
       }
     },
-    function(submissions, cb) {
+    function (submissions, cb) {
       if (!safeList.currentUserIsSafe(req)) {
         if (!submissions || submissions.length === 0) {
-          return cb({message: 'User is not authorized', code: routeHelper.HTTP_UNAUTHORIZED});
+          return cb(new errors.AuthenticationRequiredError('User is not authorized'));
         }
       }
-      findById(File, {where: {id:fileId, submissionId: submissionId}}, cb);
+      _findById(File, {where: {id:fileId, submissionId: submissionId}}, cb);
     },
-    function(file, cb) {
-      if(!file) {
-        return cb({message: 'Cannot find a file for fileId ' + fileId, code: routeHelper.HTTP_NOT_FOUND});
+    function (file, cb) {
+      if (!file) {
+        return cb(new errors.NotFoundError('Cannot find a file for fileId ' + fileId));
       }
       storageLib[method](file, cb);
     }
-  ], function(err, result) {
-    if(err) {
-      routeHelper.addError(req, err, err.code);
+  ], function (err, result) {
+    if (err) {
+      return next(err);   // go to error handler
     } else {
       req.data = {
         success: true,
-        status: routeHelper.HTTP_OK,
+        status: 200,
         metadata: {
           totalCount: 1
         },

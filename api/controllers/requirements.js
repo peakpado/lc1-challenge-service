@@ -13,7 +13,8 @@
 var datasource = require('./../../datasource').getDataSource();
 var Challenge = datasource.Challenge;
 var Requirement = datasource.Requirement;
-var controllerHelper = require('./../../lib/controllerHelper');
+var lcHelper = require('lc-helper');
+var controllerHelper = lcHelper.controllerHelper(datasource);
 
 
 // build controller for the nested files resource

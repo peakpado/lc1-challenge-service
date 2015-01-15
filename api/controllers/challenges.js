@@ -10,13 +10,17 @@
 'use strict';
 
 
+var errors = require('common-errors');
 var datasource = require('./../../datasource').getDataSource();
 var Challenge = datasource.Challenge;
 var File = datasource.File;
 var Participant = datasource.Participant;
 var Submission = datasource.Submission;
-var controllerHelper = require('./../../lib/controllerHelper');
-var routeHelper = require('./../../lib/routeHelper');
+var queryConfig = require('config').get('app.query');
+var lcHelper = require('lc-helper');
+var controllerHelper = lcHelper.controllerHelper(datasource);
+var tcAuth = require('tc-auth');
+
 
 var challengeControllerOptions = {
   filtering: true,
@@ -24,16 +28,22 @@ var challengeControllerOptions = {
     where: {
       status: 'DRAFT'
     }
-  }
+  },
+  queryConfig: queryConfig
 };
 
 // build controller for challenge resource
 var challengeController = controllerHelper.buildController(Challenge, null, challengeControllerOptions);
 
+var filteringOn = {
+  filtering: true,
+  queryConfig: queryConfig  // needed only if filtering is on
+};
 
 var filteringOff = {
   filtering: false
 };
+
 var fileControllerOptions = {
   customFilters : {
     where : {
@@ -47,7 +57,7 @@ var fileControllerOptions = {
 var fileController = controllerHelper.buildController(File, [Challenge], fileControllerOptions);
 
 // build controller for the nested participants resource
-var participantController = controllerHelper.buildController(Participant, [Challenge], {filtering: true});
+var participantController = controllerHelper.buildController(Participant, [Challenge], filteringOn);
 
 // build controller for the nested submissions resource
 var submissionController = controllerHelper.buildController(Submission, [Challenge], filteringOff);
@@ -77,17 +87,19 @@ module.exports = {
   updateSubmission: submissionController.update,
   removeSubmission: submissionController.delete,
 
-  register: function(req, res, next) {
+  register: function (req, res, next) {
     Participant.findOrCreate({
-        userId: routeHelper.getSigninUser(req).id,
-        userHandle: routeHelper.getSigninUser(req).handle,
+        userId: tcAuth.getSigninUser(req).id,
+        userHandle: tcAuth.getSigninUser(req).handle,
         role: 'SUBMITTER',
-        createdBy: routeHelper.getSigninUser(req).id,
-        updatedBy: routeHelper.getSigninUser(req).id,
+        createdBy: tcAuth.getSigninUser(req).id,
+        updatedBy: tcAuth.getSigninUser(req).id,
         challengeId: req.swagger.params.challengeId.value
       })
-      .success(function(participant, created) {
-        if(created){
+      .success(function (participant, created) {
+        if (!created) {
+          return next(new errors.ValidationError('User is already registered for the challenge.'));
+        } else {
           req.data = {
             id: participant.id,
             result: {
@@ -95,14 +107,11 @@ module.exports = {
               status: 200
             }
           };
-        }else{
-          routeHelper.addValidationError(req, 'User is already registered for the challenge.');
         }
         next();
       })
-      .error(function(err) {
-        routeHelper.addError(req, err);
-        next();
+      .error(function (err) {
+        next(new errors.Error('DBCreateError: '+err.message, err));
       });
   }
 };

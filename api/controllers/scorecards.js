@@ -13,11 +13,17 @@
 var datasource = require('./../../datasource').getDataSource();
 var Challenge = datasource.Challenge;
 var Scorecard = datasource.Scorecard;
-var controllerHelper = require('./../../lib/controllerHelper');
+var queryConfig = require('config').get('app.query');
+var lcHelper = require('lc-helper');
+var controllerHelper = lcHelper.controllerHelper(datasource);
 
+var filteringOn = {
+  filtering: true,
+  queryConfig: queryConfig  // needed only if filtering is on
+};
 
 // build controller for the nested scorecards resource
-var scorecardController = controllerHelper.buildController(Scorecard, [Challenge], {filtering: true});
+var scorecardController = controllerHelper.buildController(Scorecard, [Challenge], filteringOn);
 
 
 module.exports = {

@@ -60,6 +60,7 @@ describe('Storage Controller', function() {
       },
       function(savedEntity, cb) {
         challenge = savedEntity;
+
         var participantData = {
           userId: 1,
           userHandle: '_indy',
@@ -290,6 +291,26 @@ describe('Storage Controller', function() {
       });
     });
 
+  });
+
+  after(function(done) {
+    // delete data created during test.
+    async.eachSeries([Submission, Participant, File, Challenge], function(model, callback) {
+      model.findAll().success(function(entities) {
+        async.each(entities, function(entity, cb) {
+          entity.destroy().success(function() {
+            cb();
+          })
+          .error(function(err) {
+            cb();
+          });
+        }, function(err) {
+          callback();
+        });
+      });
+    }, function(err) {
+      done();
+    });
   });
 
 });

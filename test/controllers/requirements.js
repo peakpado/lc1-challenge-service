@@ -100,6 +100,7 @@ describe('Requirements Controller', function() {
       request(url)
       .post('/challenges/'+challenge.id+'/requirements')
       .send(reqData)
+      .expect('Content-Type', /json/)
       .end(function(err, res) {
         // verify response
         res.status.should.equal(400);
@@ -213,10 +214,12 @@ describe('Requirements Controller', function() {
     });
 
     it('should fail to update the existing requirement with challengeId different in request body and path param', function(done) {
-      reqData.challengeId = challenge.api + 3434;
+      reqData.challengeId = challenge.id + 3434;
       // send request
       request(url)
       .put('/challenges/'+challenge.id+'/requirements/'+requirementId)
+      .send(reqData)
+      .expect('Content-Type', /json/)
       .end(function(err, res) {
         // verify response
         res.status.should.equal(400);
